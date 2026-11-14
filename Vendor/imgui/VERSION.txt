@@ -14,7 +14,7 @@ NOT defined on master, so any code guarded by them silently disappears if this
 tree is ever swapped for a master build.
 
 The upstream .git directory was intentionally removed: this is a frozen copy,
-not a submodule, so a plain 'git clone' of Manifold-AccountManager is complete
+not a submodule, so a plain 'git clone' of Manifold-Vault is complete
 and buildable with no extra steps.
 
 To update: replace this directory with a fresh checkout of a newer *-docking

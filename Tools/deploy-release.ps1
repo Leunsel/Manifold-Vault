@@ -33,11 +33,11 @@ if (-not $Destination) {
     Fail (
         "No destination set. Set it once:" +
         "`n`n  Permanently (applies to NEW windows):" +
-        "`n      setx VAULT_DEPLOY_DIR `"D:\somewhere\AccountManager`"" +
+        "`n      setx VAULT_DEPLOY_DIR `"D:\somewhere\Vault`"" +
         "`n`n  For this window only (applies now):" +
-        "`n      `$env:VAULT_DEPLOY_DIR = `"D:\somewhere\AccountManager`"" +
+        "`n      `$env:VAULT_DEPLOY_DIR = `"D:\somewhere\Vault`"" +
         "`n`n  Or for this run only:" +
-        "`n      -Destination `"D:\somewhere\AccountManager`"")
+        "`n      -Destination `"D:\somewhere\Vault`"")
 }
 
 if (-not (Test-Path -LiteralPath $source)) {
