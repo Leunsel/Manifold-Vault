@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <windows.h>
 #include <d3d11.h>
@@ -71,6 +72,13 @@ namespace Bunker
 
         void SetAllowScreenshots(bool allow) { m_allowScreenshots = allow; }
 
+        float CornerRadius() const;
+        void AddDragArea(float left, float top, float right, float bottom);
+        void Minimise() { ::ShowWindow(m_hwnd, SW_MINIMIZE); }
+        bool Maximised() const { return ::IsZoomed(m_hwnd) != FALSE; }
+        void ToggleMaximised() { ::ShowWindow(m_hwnd, Maximised() ? SW_RESTORE : SW_MAXIMIZE); }
+        void RequestClose() { ::PostMessageW(m_hwnd, WM_CLOSE, 0, 0); }
+
     private:
         bool CreateAppWindow(HINSTANCE instance, int showCommand);
         bool CreateDeviceAndSwapChain();
@@ -129,6 +137,8 @@ namespace Bunker
         std::string m_machineName;
         UINT m_dpi = 96;
         float m_scaleOverride = 0.0f;
+        bool m_roundedCorners = false;
+        std::vector<RECT> m_dragAreas;
 
         void* m_baseStyle = nullptr;
 

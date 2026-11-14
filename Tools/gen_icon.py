@@ -1,148 +1,93 @@
 #!/usr/bin/env python3
-"""Generate Resources/icon.ico from Resources/icon.svg (the SVG is the source).
+"""Generate Manifold-Vault/Resources/icon.ico in the Manifold look.
 
-Renders once at 1024 px with headless Edge or Chrome, then downsamples with
-Lanczos to ten sizes from 16 to 256 px: up to 64 px as uncompressed DIB, larger
-as PNG. Requires Pillow.
+Draws a rounded tile with the Font Awesome vault glyph at 1024 px and
+downsamples it with Lanczos: up to 64 px as uncompressed DIB, larger as PNG.
+Requires Pillow.
+
+Run:  python Tools/gen_icon.py
 """
 import io
 import os
 import struct
-import subprocess
 import sys
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw, ImageFont
 except ImportError:
-    sys.exit("Pillow fehlt:  python -m pip install Pillow")
+    sys.exit("Pillow is missing:  python -m pip install Pillow")
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-RES = os.path.join(ROOT, "Manifold-Vault", "Resources")
-SVG = os.path.join(RES, "icon.svg")
-ICO = os.path.join(RES, "icon.ico")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FONT = os.path.join(ROOT, "Vendor", "fontawesome", "otfs", "fa-solid-900.otf")
+ICO = os.path.join(ROOT, "Manifold-Vault", "Resources", "icon.ico")
 
 SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
 PNG_FROM = 128
 BASE = 1024
 
-FILL_PERCENT = 92
+VAULT = ""
+GLYPH_SIZE = 580
+EDGE = (116, 226, 186, 255)
+TILE = (20, 22, 26, 255)
+GLYPH = (46, 219, 158, 255)
 
-BROWSERS = [
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-]
 
-PAGE = """<!doctype html>
-<meta charset="utf-8">
-<style>
-  html, body { margin: 0; padding: 0; height: 100%%; background: transparent; }
-  body { display: flex; align-items: center; justify-content: center; }
-  img { height: %d%%; width: auto; display: block; }
-</style>
-<img src="icon.svg">
-""" % FILL_PERCENT
+def draw_base():
+    image = Image.new("RGBA", (BASE, BASE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    margin = 40
+    draw.rounded_rectangle((margin, margin, BASE - margin, BASE - margin), radius=190, fill=EDGE)
+    edge = 44
+    draw.rounded_rectangle((margin + edge, margin + edge, BASE - margin - edge, BASE - margin - edge),
+                           radius=190 - edge, fill=TILE)
 
-def find_browser():
-    for p in BROWSERS:
-        if os.path.exists(p):
-            return p
-    sys.exit("Neither Edge nor Chrome found -- a rasteriser is required.\n"
-             "Searched:\n  " + "\n  ".join(BROWSERS))
+    font = ImageFont.truetype(FONT, GLYPH_SIZE)
+    left, top, right, bottom = draw.textbbox((0, 0), VAULT, font=font)
+    draw.text(((BASE - (right - left)) / 2 - left, (BASE - (bottom - top)) / 2 - top), VAULT,
+              font=font, fill=GLYPH)
+    return image
 
-def render_base(work):
-    """Render the SVG once at BASE x BASE, with an alpha channel."""
-    with io.open(os.path.join(work, "icon.svg"), "wb") as f:
-        f.write(io.open(SVG, "rb").read())
-    with io.open(os.path.join(work, "render.html"), "w", encoding="utf-8") as f:
-        f.write(PAGE)
 
-    out = os.path.join(work, "base.png")
-    if os.path.exists(out):
-        os.remove(out)
+def dib_entry(image):
+    width, height = image.size
+    pixels = image.load()
+    header = struct.pack("<IiiHHIIiiII", 40, width, height * 2, 1, 32, 0, 0, 0, 0, 0, 0)
+    colour = bytearray()
+    for y in range(height - 1, -1, -1):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            colour += bytes((b, g, r, a))
+    return header + bytes(colour) + bytes(((width + 31) // 32) * 4 * height)
 
-    url = "file:///" + os.path.join(work, "render.html").replace("\\", "/")
-    subprocess.run([find_browser(),
-                    "--headless", "--disable-gpu", "--no-sandbox",
-                    "--hide-scrollbars",
-                    "--default-background-color=00000000",
-                    "--window-size=%d,%d" % (BASE, BASE),
-                    "--screenshot=" + out, url],
-                   capture_output=True)
-    if not os.path.exists(out):
-        sys.exit("The rasteriser did not write an image.")
 
-    im = Image.open(out).convert("RGBA")
-    if im.size != (BASE, BASE):
-        sys.exit("Unexpected size: %s" % (im.size,))
-    if im.getchannel("A").getextrema()[0] != 0:
-        sys.exit("The rendering has no transparent border -- "
-                 "--default-background-color did not take effect.")
-    return im
+def png_entry(image):
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
 
-def dib_entry(im):
-    """Uncompressed 32-bit DIB, as an ICO expects it."""
-    w, h = im.size
-    px = im.load()
-
-    header = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, 0, 0, 0, 0, 0)
-
-    xor = bytearray()
-    for y in range(h - 1, -1, -1):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            xor += bytes((b, g, r, a))
-
-    return bytes(header) + bytes(xor) + bytes((((w + 31) // 32) * 4) * h)
-
-def png_entry(im):
-    buf = io.BytesIO()
-    im.save(buf, format="PNG", optimize=True)
-    return buf.getvalue()
 
 def main():
-    if not os.path.exists(SVG):
-        sys.exit("Keine Quelle: %s" % SVG)
+    if not os.path.exists(FONT):
+        sys.exit("Font not found: %s" % FONT)
+    base = draw_base()
+    entries = []
+    for size in SIZES:
+        scaled = base.resize((size, size), Image.Resampling.LANCZOS)
+        entries.append((size, png_entry(scaled) if size >= PNG_FROM else dib_entry(scaled)))
 
-    work = os.path.join(HERE, "_icon_tmp")
-    os.makedirs(work, exist_ok=True)
-    base = render_base(work)
-
-    blobs = []
-    for s in SIZES:
-        im = base.resize((s, s), Image.Resampling.LANCZOS)
-        data = png_entry(im) if s >= PNG_FROM else dib_entry(im)
-        blobs.append((s, data))
-
-    out = bytearray()
-    out += struct.pack("<HHH", 0, 1, len(blobs))
-    offset = 6 + 16 * len(blobs)
-    for s, data in blobs:
-        out += struct.pack("<BBBBHHII",
-                           0 if s == 256 else s,
-                           0 if s == 256 else s,
+    out = bytearray(struct.pack("<HHH", 0, 1, len(entries)))
+    offset = 6 + 16 * len(entries)
+    for size, data in entries:
+        out += struct.pack("<BBBBHHII", 0 if size == 256 else size, 0 if size == 256 else size,
                            0, 0, 1, 32, len(data), offset)
         offset += len(data)
-    for _, data in blobs:
+    for _, data in entries:
         out += data
-
-    with io.open(ICO, "wb") as f:
-        f.write(bytes(out))
-
-    for s, data in blobs:
-        print("  %3d x %-3d  %-3s %7d Byte" % (s, s, "PNG" if s >= PNG_FROM else "DIB",
-                                               len(data)))
-    print("\n  %s -- %d Eintraege, %d Byte"
-          % (os.path.relpath(ICO, ROOT), len(blobs), len(out)))
-
-    for name in ("icon.svg", "render.html", "base.png"):
-        p = os.path.join(work, name)
-        if os.path.exists(p):
-            os.remove(p)
-    os.rmdir(work)
+    with open(ICO, "wb") as file:
+        file.write(out)
+    print("%s: %d images, %d bytes" % (os.path.relpath(ICO, ROOT), len(entries), len(out)))
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

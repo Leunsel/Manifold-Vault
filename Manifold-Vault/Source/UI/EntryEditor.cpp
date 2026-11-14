@@ -2565,7 +2565,7 @@ namespace Bunker::UI::Editor
         }
         ImGui::Dummy(Px(0, 10));
 
-        ScrollFade(Token::Panel);
+        ScrollFade(Token::Surface);
         ImGui::EndChild();
 
         return documentChanged;

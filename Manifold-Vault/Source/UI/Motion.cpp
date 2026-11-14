@@ -81,7 +81,7 @@ namespace Bunker::UI::Motion
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + drop);
     }
 
-    void Entrance::End(ImVec4 ground)
+    void Entrance::End(ImVec4 ground, float rounding)
     {
         ImGui::SetCursorScreenPos(ImVec2(m_anchor.x + ImGui::GetScrollX(),
                                          m_anchor.y + ImGui::GetScrollY()));
@@ -94,10 +94,12 @@ namespace Bunker::UI::Motion
             const float edge = Px(1.0f);
             ImDrawList* dl = ImGui::GetWindowDrawList();
             dl->PushClipRect(m_windowMin, m_windowMax, false);
-            dl->AddRectFilled(ImVec2(m_windowMin.x + edge, m_windowMin.y),
-                              ImVec2(m_windowMax.x - edge, m_windowMax.y),
+            const float inset = rounding > 0.0f ? edge : 0.0f;
+            dl->AddRectFilled(ImVec2(m_windowMin.x + edge, m_windowMin.y + inset),
+                              ImVec2(m_windowMax.x - edge, m_windowMax.y - inset),
                               ImGui::ColorConvertFloat4ToU32(
-                                  ImVec4(ground.x, ground.y, ground.z, ground.w * alpha)));
+                                  ImVec4(ground.x, ground.y, ground.z, ground.w * alpha)),
+                              rounding);
             dl->PopClipRect();
         }
         ImGui::EndChild();

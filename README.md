@@ -100,7 +100,7 @@ python Tools\check_no_personal.py
 |---|---|
 | `--vault=<path>` | use a different vault file |
 | `--scale=<factor>` | override the display scale (0.5 – 4.0) |
-| `--allow-screenshots` | allow screen capture (shown in the title bar) |
+| `--allow-screenshots` | allow screen capture (shown in the taskbar title) |
 
 ## Project layout
 

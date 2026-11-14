@@ -47,6 +47,7 @@
 #include "UI/UiMath.h"
 #include "UI/UiScale.h"
 #include "UI/ScrollArea.h"
+#include "UI/WindowChrome.h"
 #include "Generated/FaIcons.h"
 
 #include "imgui.h"
@@ -514,10 +515,10 @@ namespace Bunker::UI
             ImGui::Dummy(Px(0, 2));
         }
 
-        constexpr float kRowHeight = 28.0f;
-        constexpr float kRowIconAt = 4.0f;
-        constexpr float kRowTextAt = 26.0f;
-        constexpr float kRowTallyInset = 6.0f;
+        constexpr float kRowHeight = 30.0f;
+        constexpr float kRowIconAt = 12.0f;
+        constexpr float kRowTextAt = 38.0f;
+        constexpr float kRowTallyInset = 10.0f;
         constexpr float kRowTallyGap = 6.0f;
 
         float RowTextY(float rowY, float fontSize)
@@ -554,8 +555,13 @@ namespace Bunker::UI
         };
 
         bool g_sidebarCompact = false;
+        constexpr float kSidebarWidth = 208.0f;
         constexpr float kCompactSidebarWidth = 56.0f;
-        constexpr float kTopBarHeight = 56.0f;
+        constexpr float kHeaderHeight = 40.0f;
+        constexpr float kPageMarginX = 18.0f;
+        constexpr float kPageMarginY = 14.0f;
+        constexpr float kPageGap = 12.0f;
+        constexpr float kFrameRounding = 6.0f;
         constexpr float kCompactRowHeight = 34.0f;
         constexpr float kFolderTileSize = 24.0f;
 
@@ -571,20 +577,23 @@ namespace Bunker::UI
             const ImGuiID item = ImGui::GetItemID();
             const float hot = Motion::Toward(Motion::KeyFor(item, "hover"), hovered, 0.12f);
             const float chosen = Motion::Toward(Motion::KeyFor(item, "chosen"), selected, 0.16f);
-            if (hot > 0.0f || chosen > 0.0f)
+            ImVec2 min = ImGui::GetItemRectMin();
+            ImVec2 max = ImGui::GetItemRectMax();
+            min.y += Px(1.0f);
+            max.y -= Px(1.0f);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float rounding = Theme::Round(Px(4.0f));
+            if (hot > 0.0f)
             {
-                const ImVec4& base = ImGui::GetStyleColorVec4(ImGuiCol_Header);
-                const ImVec4& over = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-                ImVec4 colour(Lerp(base.x, over.x, hot), Lerp(base.y, over.y, hot),
-                              Lerp(base.z, over.z, hot), Lerp(base.w * chosen, over.w, hot));
-                if (ImGui::IsItemActive() && hovered)
-                    colour = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
-                ImVec2 min = ImGui::GetItemRectMin();
-                ImVec2 max = ImGui::GetItemRectMax();
-                min.y += Px(1.0f);
-                max.y -= Px(1.0f);
-                ImGui::GetWindowDrawList()->AddRectFilled(min, max, ImGui::GetColorU32(colour),
-                                                          Theme::Round(Px(6.0f)));
+                const float strength = (ImGui::IsItemActive() && hovered) ? 0.09f : 0.05f;
+                dl->AddRectFilled(min, max, Theme::U32(Token::TextPrimary, strength * hot), rounding);
+            }
+            if (chosen > 0.0f)
+            {
+                dl->AddRectFilled(min, max, Theme::U32(Token::AccentCore, 0.09f * chosen), rounding);
+                const float inset = std::round((max.y - min.y) * 0.24f);
+                dl->AddRectFilled(ImVec2(min.x, min.y + inset), ImVec2(min.x + Px(3.0f), max.y - inset),
+                                  Theme::U32(Token::AccentCore, chosen), Theme::Round(Px(1.5f)));
             }
             return clicked;
         }
@@ -620,18 +629,26 @@ namespace Bunker::UI
             const ImVec2 at = ImGui::GetCursorScreenPos();
             const float width = ImGui::GetContentRegionAvail().x;
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const Token textColour = (look.Selected || look.Marked) ? Token::TextPrimary
-                                                                     : Token::TextSecondary;
+            const auto colours = [&look](bool hovered, Token& text, Token& glyph) {
+                const bool lit = look.Selected || look.Marked;
+                text = (lit || hovered) ? Token::TextPrimary : Token::TextSecondary;
+                glyph = look.OwnIconColour ? look.IconColour
+                        : lit              ? Token::AccentCore
+                        : hovered          ? Token::TextPrimary
+                                           : Token::TextMuted;
+            };
+            Token textColour = Token::TextSecondary;
+            Token iconColour = Token::TextMuted;
 
             if (g_sidebarCompact)
             {
                 const float rowHeight = Px(kCompactRowHeight);
                 const bool clicked = SidebarSelectable(id, look.Selected, rowHeight);
+                colours(ImGui::IsItemHovered(), textColour, iconColour);
                 RowTooltip(text, look.KeyName);
                 const ImVec2 centre(at.x + width * 0.5f, at.y + rowHeight * 0.5f);
                 CentredGlyph(dl, f.Text, Px(Fonts::Sizes::Body) * 1.1f, centre,
-                             Theme::U32(look.OwnIconColour ? look.IconColour : textColour),
-                             icon);
+                             Theme::U32(iconColour), icon);
                 if (look.Tally != 0 && look.BadgeWhenCompact)
                 {
                     char tally[16];
@@ -653,9 +670,10 @@ namespace Bunker::UI
             }
 
             const bool clicked = SidebarSelectable(id, look.Selected, Px(kRowHeight));
+            colours(ImGui::IsItemHovered(), textColour, iconColour);
             const float textY = RowTextY(at.y, Px(Fonts::Sizes::Body));
             dl->AddText(f.Text, Px(Fonts::Sizes::Body), ImVec2(at.x + Px(kRowIconAt), textY),
-                        Theme::U32(look.OwnIconColour ? look.IconColour : textColour), icon);
+                        Theme::U32(iconColour), icon);
 
             float textEnd = at.x + width - Px(kRowTallyInset);
             if (look.Tally != 0)
@@ -757,34 +775,95 @@ namespace Bunker::UI
             });
         }
 
-        void DrawTopBar(Application& app, VaultSession& session, float height)
+        void SelectFolder(const Vault::Document& doc, FolderScope scope, const std::string& name);
+
+        struct PageTitle
+        {
+            const char* Icon = ICON_FA_LAYER_GROUP;
+            std::string Text;
+            const char* CloseTip = nullptr;
+        };
+
+        PageTitle CurrentPageTitle()
+        {
+            PageTitle title;
+            if (Settings::IsOpen() || Audit::IsOpen())
+            {
+                const bool settings = Settings::IsOpen();
+                title.Icon = settings ? ICON_FA_GEAR : ICON_FA_SHIELD_HALVED;
+                title.Text = settings ? T(Str::Settings_Title) : T(Str::Audit_Title);
+                title.CloseTip = T(Str::Common_Close);
+                return title;
+            }
+            switch (g_folderScope)
+            {
+            case FolderScope::All:
+                title.Text = T(Str::Main_FolderAll);
+                return title;
+            case FolderScope::Favourites:
+                title.Icon = ICON_FA_STAR;
+                title.Text = T(Str::Main_Favourites);
+                break;
+            case FolderScope::Unfiled:
+                title.Icon = ICON_FA_CIRCLE_MINUS;
+                title.Text = T(Str::Main_FolderScopeUnfiled);
+                break;
+            case FolderScope::One:
+                title.Icon = ICON_FA_FOLDER;
+                title.Text = g_folderName;
+                break;
+            case FolderScope::Finding:
+            {
+                char text[192];
+                std::snprintf(text, sizeof(text), T(Str::Main_ScopeFinding),
+                              Audit::KindName(g_findingKind));
+                title.Icon = ICON_FA_SHIELD_HALVED;
+                title.Text = text;
+                break;
+            }
+            }
+            title.CloseTip = T(Str::Main_ShowAllFolders);
+            return title;
+        }
+
+        void ClosePage(const Vault::Document& doc)
+        {
+            if (Settings::IsOpen() || Audit::IsOpen())
+            {
+                Settings::Close();
+                Audit::Close();
+                return;
+            }
+            SelectFolder(doc, FolderScope::All, {});
+        }
+
+        void DrawHeader(Application& app, VaultSession& session, float height)
         {
             const Fonts::Set& f = Fonts::Current();
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const ImVec2 p = ImGui::GetCursorScreenPos();
             const float width = ImGui::GetContentRegionAvail().x;
-
-            dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), Theme::U32(Token::Panel));
-            dl->AddLine(ImVec2(p.x, p.y + height - 1), ImVec2(p.x + width, p.y + height - 1),
-                        Theme::U32(Token::Line));
+            const ImVec2 max(p.x + width, p.y + height);
+            const float rounding = Theme::Round(Px(kFrameRounding));
+            dl->AddRectFilled(p, max, Theme::CardU32(), rounding);
             {
                 const float half = Px(1.0f) * 0.5f;
-                dl->AddLine(ImVec2(p.x + half, p.y), ImVec2(p.x + half, p.y + height),
-                            Theme::U32(Token::Line), Px(1.0f));
+                dl->AddRect(ImVec2(p.x + half, p.y + half), ImVec2(max.x - half, max.y - half),
+                            Theme::U32(Token::Line), rounding, 0, Px(1.0f));
             }
 
-            const float centreY = p.y + height * 0.5f;
-            const float margin = Px(18.0f);
-            const float gap = Px(14.0f);
-            const float frame = Px(34.0f);
-            float right = p.x + width - margin;
+            const float centreY = std::round(p.y + height * 0.5f);
+            const float gap = Px(12.0f);
+            const float frame = Px(28.0f);
+            const float side = ImGui::GetFrameHeight();
+            const float buttonsX = max.x - Px(6.0f) - WindowButtonsWidth();
+            WindowButtons(app, ImVec2(buttonsX, std::round(centreY - side * 0.5f)));
+            float right = buttonsX - Px(10.0f);
 
             ImGui::SetCursorScreenPos(ImVec2(right - frame, centreY - frame * 0.5f));
-            ImGui::PushStyleColor(ImGuiCol_Button, Theme::Color(Token::Elevated, 0.55f));
-            if (UI::IconButton("###topgen", ICON_FA_DICE, ImVec2(frame, frame),
-                               Token::TextSecondary, T(Str::Main_GeneratePassword)))
+            if (UI::IconLink("##topgen", ICON_FA_DICE, ImVec2(frame, frame), Token::TextSecondary,
+                             Token::TextPrimary, T(Str::Main_GeneratePassword)))
                 Editor::OpenStandaloneGenerator();
-            ImGui::PopStyleColor();
             right -= frame + Px(8.0f);
 
             {
@@ -905,18 +984,59 @@ namespace Bunker::UI
                        PillPresence(g_noticeUntil - kNoticeSeconds, g_noticeUntil, now));
             }
 
-            const float searchX = p.x + margin;
-            const float wantedWidth = Clamp(leftEdge - gap - searchX, Px(160.0f), Px(520.0f));
-            const float searchWidth = std::floor(
-                Motion::Follow(ImGui::GetID("##search-width"), wantedWidth, 0.14f) + 0.5f);
+            const PageTitle title = CurrentPageTitle();
+            const float size = Px(Fonts::Sizes::Body);
+            const float textY = std::round(centreY - size * 0.5f);
+            const float left = p.x + Px(14.0f);
+            dl->AddText(f.Text, size, ImVec2(left, textY), Theme::U32(Token::AccentCore), title.Icon);
+            const float textX =
+                left + f.Text->CalcTextSizeA(size, FLT_MAX, 0.0f, title.Icon).x + Px(9.0f);
+            const float closeSize = Px(24.0f);
+            const float room = Max(Px(40.0f), leftEdge - gap - textX -
+                                                  (title.CloseTip ? closeSize + Px(6.0f) : 0.0f));
+            const std::string shown = FitEnd(title.Text, f.Medium, size, room);
+            const float shownWidth = f.Medium->CalcTextSizeA(size, FLT_MAX, 0.0f, shown.c_str()).x;
+            dl->AddText(f.Medium, size, ImVec2(textX, textY), Theme::U32(Token::TextPrimary),
+                        shown.c_str());
+            if (shown != title.Text &&
+                ImGui::IsMouseHoveringRect(ImVec2(textX, p.y), ImVec2(textX + shownWidth, max.y)) &&
+                ImGui::IsWindowHovered())
+                UI::Tooltip(title.Text);
+
+            float dragFrom = p.x;
+            if (title.CloseTip)
+            {
+                const float closeX = std::round(textX + shownWidth + Px(6.0f));
+                ImGui::SetCursorScreenPos(ImVec2(closeX, centreY - closeSize * 0.5f));
+                if (UI::IconLink("##page-close", ICON_FA_XMARK, ImVec2(closeSize, closeSize),
+                                 Token::TextMuted, Token::TextPrimary, title.CloseTip))
+                    ClosePage(session.Vault().Doc());
+                app.AddDragArea(p.x, p.y, closeX, max.y);
+                dragFrom = closeX + closeSize;
+            }
+            app.AddDragArea(dragFrom, p.y, leftEdge, max.y);
+            {
+                const ImVec2 win = ImGui::GetWindowPos();
+                app.AddDragArea(win.x, win.y, win.x + ImGui::GetWindowWidth(), p.y);
+            }
+
+            ImGui::SetCursorScreenPos(ImVec2(p.x, max.y));
+        }
+
+        void DrawSearchField(VaultSession& session, float width)
+        {
+            const Fonts::Set& f = Fonts::Current();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float frame = Px(30.0f);
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const float centreY = at.y + frame * 0.5f;
             const float padY = Max(Px(3.0f), (frame - ImGui::GetFontSize()) * 0.5f);
-            ImGui::SetCursorScreenPos(ImVec2(searchX, centreY - frame * 0.5f));
             if (g_focusSearch)
             {
                 ImGui::SetKeyboardFocusHere();
                 g_focusSearch = false;
             }
-            ImGui::SetNextItemWidth(searchWidth);
+            ImGui::SetNextItemWidth(width);
             char searchHint[192];
             if (g_folderScope == FolderScope::One)
             {
@@ -928,15 +1048,10 @@ namespace Bunker::UI
                 std::snprintf(searchHint, sizeof(searchHint), "%s", T(Str::Main_SearchHint));
             }
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(Px(34.0f), padY));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, Theme::Round(Px(8.0f)));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, Theme::Round(Px(5.0f)));
             ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
             ImGui::PushStyleColor(ImGuiCol_Border, Theme::Color(Token::Line));
-            if (ImGui::InputTextWithHint("##search", searchHint,
-                                         g_search, IM_ARRAYSIZE(g_search)))
-            {
-                Settings::Close();
-                Audit::Close();
-            }
+            ImGui::InputTextWithHint("##search", searchHint, g_search, IM_ARRAYSIZE(g_search));
             if (ImGui::IsItemDeactivated() &&
                 (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
                  ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
@@ -969,8 +1084,6 @@ namespace Bunker::UI
                                 Theme::U32(Token::TextMuted), key);
                 }
             }
-
-            ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + height));
         }
 
         bool CopyPasswordOf(Application& app, VaultSession& session, const Entry* e)
@@ -1193,13 +1306,17 @@ namespace Bunker::UI
 
             const float rowHeight = Px(kRowHeight);
             const bool clicked = SidebarSelectable("##folder", selected, rowHeight);
+            const bool hovered = ImGui::IsItemHovered();
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 colour = Theme::U32((selected || marked) ? Token::TextPrimary
-                                                                 : Token::TextSecondary);
+            const ImU32 colour = Theme::U32((selected || marked || hovered) ? Token::TextPrimary
+                                                                            : Token::TextSecondary);
+            const Token glyph = (selected || marked) ? Token::AccentCore
+                                : hovered            ? Token::TextPrimary
+                                                     : Token::TextMuted;
             const float textY = RowTextY(at.y, Px(Fonts::Sizes::Body));
             dl->AddText(f.Text, Px(Fonts::Sizes::Body), ImVec2(at.x + Px(kRowIconAt), textY),
-                        Theme::U32(Token::TextMuted), icon);
+                        Theme::U32(glyph), icon);
 
             char tally[24];
             std::snprintf(tally, sizeof(tally), "%zu", count);
@@ -1399,7 +1516,8 @@ namespace Bunker::UI
             }
         }
 
-        void DrawSidebarHead(Application& app, VaultSession& session, float headHeight)
+        void DrawSidebarHead(Application& app, VaultSession& session, float headTop,
+                             float headHeight, float gap)
         {
             const Fonts::Set& f = Fonts::Current();
             ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -1407,119 +1525,61 @@ namespace Bunker::UI
             const float winWidth = ImGui::GetWindowWidth();
             const ImVec2 at = ImGui::GetCursorScreenPos();
             const float w = ImGui::GetContentRegionAvail().x;
+            const float centreY = std::round(win.y + headTop + headHeight * 0.5f);
+            const float size = Px(Fonts::Sizes::Body);
+            float dragRight = win.x + winWidth;
 
-            dl->AddLine(ImVec2(win.x, win.y + headHeight - 1),
-                        ImVec2(win.x + winWidth, win.y + headHeight - 1), Theme::U32(Token::Line));
-
-            const float tile = Px(32.0f);
-            const float tileX = g_sidebarCompact ? at.x + (w - tile) * 0.5f : at.x;
-            const float tileY = win.y + (headHeight - tile) * 0.5f;
-            const ImVec2 t0(tileX, tileY);
-            const ImVec2 t1(tileX + tile, tileY + tile);
-            dl->AddRectFilled(t0, t1, Theme::U32(Token::AccentCore, 0.14f), Theme::Round(Px(8.0f)));
-            dl->AddRect(t0, t1, Theme::U32(Token::AccentCore, 0.45f), Theme::Round(Px(8.0f)), 0, 1.0f);
-            CentredGlyph(dl, f.Strong, Px(Fonts::Sizes::Body) * 1.15f,
-                         ImVec2(tileX + tile * 0.5f, tileY + tile * 0.5f),
-                         Theme::U32(Token::AccentCore), ICON_FA_VAULT);
-
-            if (!g_sidebarCompact)
+            if (g_sidebarCompact)
+            {
+                CentredGlyph(dl, f.Strong, size * 1.1f, ImVec2(at.x + w * 0.5f, centreY),
+                             Theme::U32(Token::AccentCore), ICON_FA_CUBE);
+            }
+            else
             {
                 const float toggle = Px(26.0f);
-                const float textX = tileX + tile + Px(10.0f);
-                const float textRight = at.x + w - toggle - Px(6.0f);
-                const float nameSize = Px(Fonts::Sizes::Body) + Px(1.0f);
-                const float tagSize = Px(Fonts::Sizes::Label) * 0.92f;
-                dl->PushClipRect(ImVec2(textX, win.y), ImVec2(textRight, win.y + headHeight), true);
-                dl->AddText(f.Strong, nameSize, ImVec2(textX, tileY - Px(1.0f)),
-                            Theme::U32(Token::TextPrimary), "Vault");
-                dl->AddText(f.Mono, tagSize, ImVec2(textX, tileY + nameSize + Px(3.0f)),
-                            Theme::U32(Token::TextMuted), T(Str::Main_BrandTagline));
+                const float textY = std::round(centreY - size * 0.5f);
+                float x = at.x + Px(kRowIconAt);
+                dl->AddText(f.Strong, size, ImVec2(x, textY), Theme::U32(Token::AccentCore),
+                            ICON_FA_CUBE);
+                x += f.Strong->CalcTextSizeA(size, FLT_MAX, 0.0f, ICON_FA_CUBE).x + Px(10.0f);
+                dl->PushClipRect(ImVec2(x, win.y), ImVec2(at.x + w - toggle - Px(4.0f), centreY + size),
+                                 true);
+                dl->AddText(f.Medium, size, ImVec2(x, textY), Theme::U32(Token::TextPrimary),
+                            "Manifold");
+                x += f.Medium->CalcTextSizeA(size, FLT_MAX, 0.0f, "Manifold").x + Px(6.0f);
+                dl->AddText(f.Text, size, ImVec2(x, textY), Theme::U32(Token::TextMuted), "Vault");
                 dl->PopClipRect();
 
                 char toggleTip[128];
                 std::snprintf(toggleTip, sizeof(toggleTip), "%s   %s",
                               T(Str::Main_CollapseSidebar),
                               Shortcuts::KeyName(Shortcuts::Action::ToggleSidebar));
-                ImGui::SetCursorScreenPos(
-                    ImVec2(at.x + w - toggle, win.y + (headHeight - toggle) * 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_Button, Theme::Color(Token::Elevated, 0.55f));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-                if (UI::IconButton("###sidebar-toggle", ICON_FA_CHEVRON_LEFT,
-                                   ImVec2(toggle, toggle), Token::TextMuted, toggleTip))
+                const float toggleX = at.x + w - toggle;
+                ImGui::SetCursorScreenPos(ImVec2(toggleX, centreY - toggle * 0.5f));
+                if (UI::IconLink("##sidebar-toggle", ICON_FA_CHEVRON_LEFT, ImVec2(toggle, toggle),
+                                 Token::TextMuted, Token::TextPrimary, toggleTip))
                     ToggleSidebar(app, session);
-                ImGui::PopStyleVar();
-                ImGui::PopStyleColor();
+                app.AddDragArea(toggleX + toggle, win.y, dragRight, win.y + headTop + headHeight);
+                app.AddDragArea(toggleX, win.y, toggleX + toggle, centreY - toggle * 0.5f);
+                app.AddDragArea(toggleX, centreY + toggle * 0.5f, toggleX + toggle,
+                                win.y + headTop + headHeight);
+                dragRight = toggleX;
             }
-            ImGui::SetCursorScreenPos(ImVec2(at.x, win.y + headHeight + Px(10.0f)));
+            app.AddDragArea(win.x, win.y, dragRight, win.y + headTop + headHeight);
+            ImGui::SetCursorScreenPos(ImVec2(at.x, win.y + headTop + headHeight + gap));
         }
 
-        void DrawVaultCard(Application& app, const Vault::Document& doc,
-                           const Vault::FolderSurvey& folders, std::size_t favourites)
-        {
-            const Fonts::Set& f = Fonts::Current();
-            BeginBox("##vaultcard", ImGui::GetContentRegionAvail().x, Px(12.0f, 10.0f));
-            const ImVec2 at = ImGui::GetCursorScreenPos();
-            const float w = ImGui::GetContentRegionAvail().x;
-            const float labelSize = Px(Fonts::Sizes::Label);
-
-            ImGui::PushStyleColor(ImGuiCol_Text, Theme::Color(Token::TextMuted));
-            ImGui::PushFont(f.Mono, Fonts::Sizes::Label);
-            ImGui::TextUnformatted(T(Str::Main_VaultCardLabel));
-            ImGui::PopFont();
-            ImGui::PopStyleColor();
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(at.x + w - Px(4.0f), at.y + labelSize * 0.55f), Px(3.5f),
-                Theme::U32(app.Saves().Failing() ? Token::RedCore : Token::GreenCore));
-
-            char count[64];
-            if (doc.Entries.size() == 1)
-                std::snprintf(count, sizeof(count), "%s", T(Str::Main_CountEntryOne));
-            else
-                std::snprintf(count, sizeof(count), T(Str::Main_CountEntryMany), doc.Entries.size());
-            ImGui::PushFont(f.Strong, Fonts::Sizes::Title);
-            ImGui::TextUnformatted(count);
-            ImGui::PopFont();
-
-            char favouritesText[64];
-            if (favourites == 1)
-                std::snprintf(favouritesText, sizeof(favouritesText), "%s", T(Str::Main_CountFavouriteOne));
-            else
-                std::snprintf(favouritesText, sizeof(favouritesText), T(Str::Main_CountFavouriteMany),
-                              favourites);
-            char foldersText[64];
-            if (folders.Folders.size() == 1)
-                std::snprintf(foldersText, sizeof(foldersText), "%s", T(Str::Main_CountFolderOne));
-            else
-                std::snprintf(foldersText, sizeof(foldersText), T(Str::Main_CountFolderMany),
-                              folders.Folders.size());
-            const std::string sub = UppercaseGerman(std::string(favouritesText) +
-                                                    "  \xc2\xb7  " + foldersText);
-            ImGui::PushStyleColor(ImGuiCol_Text, Theme::Color(Token::TextMuted));
-            ImGui::PushFont(f.Mono, Fonts::Sizes::Label);
-            ImGui::TextUnformatted(FitEnd(sub, f.Mono, labelSize, w).c_str());
-            ImGui::PopFont();
-            ImGui::PopStyleColor();
-
-            EndBox(Theme::U32(Token::Elevated, 0.45f), Theme::U32(Token::Line),
-                   Theme::Round(Px(10.0f)));
-            ImGui::Dummy(Px(0, 6));
-        }
-
-        void DrawSidebar(Application& app, VaultSession& session,
-                         float width, float height, float headHeight)
+        void DrawSidebar(Application& app, VaultSession& session, float width, float height,
+                         float headTop, float headHeight, float gap)
         {
             const Vault::Document& doc = session.Vault().Doc();
             const Fonts::Set& f = Fonts::Current();
             g_sidebarCompact = doc.VaultSettings.SidebarCollapsed;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::Color(Token::Panel));
-            if (g_sidebarCompact)
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(8, 10));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
             ImGui::BeginChild("##sidebar", ImVec2(width, height),
                               ImGuiChildFlags_AlwaysUseWindowPadding);
-            if (g_sidebarCompact)
-                ImGui::PopStyleVar();
 
-            ImGui::PushStyleVar(ImGuiStyleVar_SelectableRounding, Theme::Round(Px(6.0f)));
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableRounding, Theme::Round(Px(4.0f)));
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                                 ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
@@ -1527,7 +1587,7 @@ namespace Bunker::UI
             if (Editor::TakeDiscardedNotice())
                 g_discardedNoticeUntil = ImGui::GetTime() + 12.0;
 
-            DrawSidebarHead(app, session, headHeight);
+            DrawSidebarHead(app, session, headTop, headHeight, gap);
 
             if (g_sidebarCompact)
             {
@@ -1568,9 +1628,6 @@ namespace Bunker::UI
             for (const Entry& e : doc.Entries)
                 if (e.Favourite)
                     ++favourites;
-
-            if (!g_sidebarCompact)
-                DrawVaultCard(app, doc, folders, favourites);
 
             {
                 MenuRowLook allLook;
@@ -1629,6 +1686,7 @@ namespace Bunker::UI
             else
             {
                 ImGui::Dummy(Px(0, 8));
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Px(kRowIconAt));
                 SectionLabel(T(Str::Main_SectionFolders));
             }
 
@@ -1914,30 +1972,6 @@ namespace Bunker::UI
             }
         }
 
-        void ColumnRules(bool left, bool right)
-        {
-            if (Theme::SeparatesByTone())
-                return;
-            const ImVec2 pos = ImGui::GetWindowPos();
-            const ImVec2 size = ImGui::GetWindowSize();
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 colour = Theme::U32(Token::Line);
-            const float half = Px(1.0f) * 0.5f;
-            dl->PushClipRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), false);
-            if (left)
-                dl->AddLine(ImVec2(pos.x + half, pos.y), ImVec2(pos.x + half, pos.y + size.y),
-                            colour, Px(1.0f));
-            if (right)
-                dl->AddLine(ImVec2(pos.x + size.x - half, pos.y),
-                            ImVec2(pos.x + size.x - half, pos.y + size.y), colour, Px(1.0f));
-            dl->PopClipRect();
-        }
-
-        void ListColumnRules()
-        {
-            ColumnRules(true, true);
-        }
-
         void SetListOrder(Application& app, VaultSession& session, Vault::SortOrder order)
         {
             Vault::Document& doc = session.Vault().Doc();
@@ -1956,7 +1990,7 @@ namespace Bunker::UI
             const Fonts::Set& f = Fonts::Current();
             const Vault::Document& doc = session.Vault().Doc();
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            ImGui::Dummy(Px(0, 6));
+            ImGui::Dummy(Px(0, 4));
             const ImVec2 at = ImGui::GetCursorScreenPos();
             const float width = ImGui::GetContentRegionAvail().x;
             const float left = at.x + Px(12.0f);
@@ -1965,15 +1999,13 @@ namespace Bunker::UI
 
             const Vault::SortOrder order = Vault::SortOrderFrom(doc.VaultSettings.ListOrder);
             ImGui::SetCursorScreenPos(ImVec2(right - lineHeight, at.y));
-            ImGui::PushStyleColor(ImGuiCol_Button, Theme::Color(Token::Elevated, 0.55f));
             char sortTip[160];
             std::snprintf(sortTip, sizeof(sortTip), "%s: %s", T(Str::Main_SortTooltip),
                           order == Vault::SortOrder::Modified ? T(Str::Main_SortMenuModified)
                                                               : T(Str::Main_SortMenuName));
-            if (UI::IconButton("###sortmenu-open", ICON_FA_SORT, ImVec2(lineHeight, lineHeight),
-                               Token::TextSecondary, sortTip))
+            if (UI::IconLink("##sortmenu-open", ICON_FA_SORT, ImVec2(lineHeight, lineHeight),
+                             Token::TextSecondary, Token::TextPrimary, sortTip))
                 ImGui::OpenPopup("##sortmenu");
-            ImGui::PopStyleColor();
             if (ImGui::BeginPopup("##sortmenu"))
             {
                 if (ImGui::MenuItem(T(Str::Main_SortMenuName), nullptr,
@@ -1983,50 +2015,6 @@ namespace Bunker::UI
                                     order == Vault::SortOrder::Modified))
                     SetListOrder(app, session, Vault::SortOrder::Modified);
                 ImGui::EndPopup();
-            }
-
-            const bool filtered = g_folderScope != FolderScope::All;
-            char title[192];
-            if (g_folderScope == FolderScope::Favourites)
-                std::snprintf(title, sizeof(title), "%s", T(Str::Main_Favourites));
-            else if (g_folderScope == FolderScope::Unfiled)
-                std::snprintf(title, sizeof(title), "%s", T(Str::Main_FolderScopeUnfiled));
-            else if (g_folderScope == FolderScope::One)
-                std::snprintf(title, sizeof(title), "%s", g_folderName.c_str());
-            else if (g_folderScope == FolderScope::Finding)
-                std::snprintf(title, sizeof(title), T(Str::Main_ScopeFinding),
-                              Audit::KindName(g_findingKind));
-            else
-                std::snprintf(title, sizeof(title), "%s", T(Str::Main_FolderAll));
-
-            const float titleSize = Px(Fonts::Sizes::Title);
-            const float closeSize = Px(22.0f);
-            const float titleRoom = Max(Px(40.0f), right - lineHeight - Px(10.0f) -
-                                                       (filtered ? closeSize + Px(6.0f) : 0.0f) - left);
-            const std::string shownTitle = FitEnd(title, f.Strong, titleSize, titleRoom);
-            const float titleWidth =
-                f.Strong->CalcTextSizeA(titleSize, FLT_MAX, 0.0f, shownTitle.c_str()).x;
-            const ImVec2 titleAt(left, at.y + (lineHeight - titleSize) * 0.5f - Px(1.0f));
-            dl->AddText(f.Strong, titleSize, titleAt, Theme::U32(Token::TextPrimary),
-                        shownTitle.c_str());
-            if (shownTitle != title &&
-                ImGui::IsMouseHoveringRect(titleAt, ImVec2(titleAt.x + titleWidth,
-                                                          titleAt.y + titleSize)) &&
-                ImGui::IsWindowHovered())
-                UI::Tooltip(title);
-
-            if (filtered)
-            {
-                ImGui::SetCursorScreenPos(ImVec2(left + titleWidth + Px(6.0f),
-                                                 at.y + (lineHeight - closeSize) * 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-                if (UI::IconButton("###scopeclear", ICON_FA_XMARK,
-                                   ImVec2(closeSize, closeSize), Token::TextMuted,
-                                   T(Str::Main_ShowAllFolders)))
-                    SelectFolder(doc, FolderScope::All, {});
-                ImGui::PopStyleVar();
-                ImGui::PopStyleColor();
             }
 
             std::size_t favourites = 0;
@@ -2047,14 +2035,17 @@ namespace Bunker::UI
                 std::snprintf(favouritesText, sizeof(favouritesText),
                               T(Str::Main_CountFavouriteMany), favourites);
             const float labelSize = Px(Fonts::Sizes::Label);
-            const float countsY = at.y + lineHeight + Px(2.0f);
+            const float countsY = at.y + (lineHeight - labelSize) * 0.5f;
             const std::string counts = UppercaseGerman(std::string(entriesText) +
                                                        "  \xc2\xb7  " + favouritesText);
             dl->AddText(f.Mono, labelSize, ImVec2(left, countsY), Theme::U32(Token::TextMuted),
-                        FitEnd(counts, f.Mono, labelSize, right - left).c_str());
+                        FitEnd(counts, f.Mono, labelSize, right - lineHeight - Px(8.0f) - left).c_str());
+
+            ImGui::SetCursorScreenPos(ImVec2(left, at.y + lineHeight + Px(6.0f)));
+            DrawSearchField(session, right - Px(4.0f) - left);
 
             const float chipHeight = Px(26.0f);
-            const float chipY = countsY + labelSize + Px(12.0f);
+            const float chipY = ImGui::GetItemRectMax().y + Px(10.0f);
             const float chipSize = Px(Fonts::Sizes::Small);
             float chipX = left;
             auto chip = [&](const char* id, const char* text, bool on) {
@@ -2109,20 +2100,27 @@ namespace Bunker::UI
             const std::vector<Entry>& entries = session.Vault().Doc().Entries;
             (void)entries;
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::Color(Token::Surface));
-            ImGui::BeginChild("##list", ImVec2(width, height), ImGuiChildFlags_None,
+            const float rounding = Theme::Round(Px(kFrameRounding));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::CardColor());
+            ImGui::PushStyleColor(ImGuiCol_Border, Theme::Color(Token::Line));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, Px(1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            ImGui::BeginChild("##list", ImVec2(width, height), ImGuiChildFlags_Borders,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor();
             g_listEntrance.Begin(1, Px(6.0f), 1.0f);
 
             if (entries.empty())
             {
+                g_focusSearch = false;
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(22, 10));
                 ImGui::BeginChild("##empty", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
                 DrawEmptyState(session);
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
-                ListColumnRules();
-                g_listEntrance.End(Theme::Color(Token::Surface));
+                g_listEntrance.End(Theme::CardColor(), rounding);
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
                 return;
@@ -2531,7 +2529,7 @@ namespace Bunker::UI
                 ImGui::Dummy(ImVec2(0.0f, 0.0f));
             }
 
-            ScrollFade(Token::Surface);
+            ScrollFade(Theme::CardColor());
             ImGui::EndChild();
 
             {
@@ -2553,8 +2551,7 @@ namespace Bunker::UI
                                    rowsMax.x - textX - Px(8.0f)).c_str());
             }
 
-            ListColumnRules();
-            g_listEntrance.End(Theme::Color(Token::Surface));
+            g_listEntrance.End(Theme::CardColor(), rounding);
             ImGui::EndChild();
             ImGui::PopStyleColor();
         }
@@ -4134,7 +4131,6 @@ namespace Bunker::UI
                     g_scrollToSelection = true;
                     Audit::Close();
                 }
-                ColumnRules(true, false);
                 return;
             }
 
@@ -4142,7 +4138,6 @@ namespace Bunker::UI
             {
                 if (Settings::Draw(app, session))
                     SaveNow(app, session);
-                ColumnRules(true, false);
                 return;
             }
 
@@ -4416,7 +4411,7 @@ namespace Bunker::UI
             }
             ImGui::Dummy(Px(0, 8));
 
-            ScrollFade(Token::Panel);
+            ScrollFade(Token::Surface);
             ImGui::EndChild();
         }
 
@@ -4454,7 +4449,7 @@ namespace Bunker::UI
 
         void DrawDetail(Application& app, VaultSession& session, float width, float height)
         {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::Color(Token::Panel));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
             ImGui::BeginChild("##detail", ImVec2(width, height),
                               ImGuiChildFlags_AlwaysUseWindowPadding);
 
@@ -4465,7 +4460,7 @@ namespace Bunker::UI
 
             DrawDetailBody(app, session);
 
-            g_detailEntrance.End(Theme::Color(Token::Panel));
+            g_detailEntrance.End(Theme::Color(Token::Surface));
             ImGui::EndChild();
             ImGui::PopStyleColor();
         }
@@ -4486,10 +4481,11 @@ namespace Bunker::UI
             const float width = ImGui::GetContentRegionAvail().x;
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float rounding = Theme::Round(Px(kFrameRounding));
             dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height),
-                              Theme::U32(Token::RedCore, 0.16f));
-            dl->AddLine(ImVec2(p.x, p.y + height - 1), ImVec2(p.x + width, p.y + height - 1),
-                        Theme::U32(Token::RedCore, 0.55f));
+                              Theme::U32(Token::RedCore, 0.16f), rounding);
+            dl->AddRect(p, ImVec2(p.x + width, p.y + height), Theme::U32(Token::RedCore, 0.55f),
+                        rounding, 0, Px(1.0f));
 
             ImGui::SetCursorScreenPos(ImVec2(p.x + Px(14), p.y + Px(8)));
             ImGui::PushFont(f.Strong, Fonts::Sizes::Body);
@@ -4553,7 +4549,7 @@ namespace Bunker::UI
             }
             ImGui::PopStyleColor(3);
 
-            ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + height));
+            ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + height + Px(kPageGap)));
         }
 
         bool DrawDeletePopup(Application& app, VaultSession& session)
@@ -5415,6 +5411,25 @@ namespace Bunker::UI
 
     namespace
     {
+        void DrawWindowBackground(Application& app, float sidebarWidth)
+        {
+            const ImVec2 pos = ImGui::GetWindowPos();
+            const ImVec2 size = ImGui::GetWindowSize();
+            const ImVec2 max(pos.x + size.x, pos.y + size.y);
+            const float split = pos.x + sidebarWidth;
+            const float rounding = app.CornerRadius();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddRectFilled(pos, ImVec2(split, max.y), Theme::U32(Token::Panel), rounding,
+                              ImDrawFlags_RoundCornersLeft);
+            dl->AddRectFilled(ImVec2(split, pos.y), max, Theme::U32(Token::Surface), rounding,
+                              ImDrawFlags_RoundCornersRight);
+            if (!Theme::SeparatesByTone())
+            {
+                const float x = split - Px(1.0f) * 0.5f;
+                dl->AddLine(ImVec2(x, pos.y), ImVec2(x, max.y), Theme::U32(Token::Line), Px(1.0f));
+            }
+            DrawWindowEdge(app, dl);
+        }
     }
 
     void DrawMain(Application& app, VaultSession& session)
@@ -5427,44 +5442,66 @@ namespace Bunker::UI
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
         ImGui::Begin("##shell", nullptr,
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus);
+        ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
 
         if (ListOwnsKeys())
             ImGui::SetNavCursorVisible(false);
 
-        const float topBarHeight = Px(kTopBarHeight);
         const float fullHeight = ImGui::GetContentRegionAvail().y;
         const float sidebarWidth = session.Vault().Doc().VaultSettings.SidebarCollapsed
                                        ? Px(kCompactSidebarWidth)
-                                       : Px(208.0f);
+                                       : Px(kSidebarWidth);
         const float listWidth = Px(330.0f);
+        const float marginX = std::round(Px(kPageMarginX));
+        const float marginY = std::round(Px(kPageMarginY));
+        const float gap = std::round(Px(kPageGap));
+        const float headerHeight = std::round(Px(kHeaderHeight));
+        const float overhang = std::round(Px(kScrollOverhang));
+
+        DrawWindowBackground(app, sidebarWidth);
 
         if (g_folderScope == FolderScope::Finding)
             Audit::EntriesWith(session, g_findingKind, g_findingIds);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(14, 10));
-        DrawSidebar(app, session, sidebarWidth, fullHeight, topBarHeight);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(8, 10));
+        DrawSidebar(app, session, sidebarWidth, fullHeight, marginY, headerHeight, gap);
         ImGui::PopStyleVar();
         ImGui::SameLine(0, 0);
 
-        ImGui::BeginGroup();
-        DrawTopBar(app, session, topBarHeight);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(marginX, marginY));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+        ImGui::BeginChild("##content", ImVec2(0, fullHeight), ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+
+        DrawHeader(app, session, headerHeight);
+        {
+            const ImVec2 below = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos(ImVec2(below.x, below.y + gap));
+        }
         DrawSaveBanner(app, session);
         const float bodyHeight = ImGui::GetContentRegionAvail().y;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(14, 10));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(overhang, 0.0f));
         if (!Settings::IsOpen() && !Audit::IsOpen())
         {
             DrawEntryList(app, session, listWidth, bodyHeight);
-            ImGui::SameLine(0, 0);
+            ImGui::SameLine(0, gap - overhang);
         }
-        DrawDetail(app, session, ImGui::GetContentRegionAvail().x, bodyHeight);
+        else
+        {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - overhang);
+        }
+        DrawDetail(app, session, ImGui::GetContentRegionAvail().x + overhang, bodyHeight);
         ImGui::PopStyleVar();
-        ImGui::EndGroup();
+        ImGui::EndChild();
         ApplyRowAction(app, session);
 
         if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId |
@@ -5500,7 +5537,11 @@ namespace Bunker::UI
                 }
             }
             if (Shortcuts::Pressed(Action::Search))
+            {
+                Settings::Close();
+                Audit::Close();
                 g_focusSearch = true;
+            }
             if (Shortcuts::Pressed(Action::JumpToFolder))
                 g_folderJumpPending = true;
             if (Shortcuts::Pressed(Action::CommandPalette))

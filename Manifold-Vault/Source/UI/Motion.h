@@ -22,7 +22,7 @@ namespace Bunker::UI::Motion
     public:
         void Begin(std::uint64_t key, float rise, float depth);
 
-        void End(ImVec4 ground);
+        void End(ImVec4 ground, float rounding = 0.0f);
 
         std::uint64_t Key() const { return m_key; }
 

@@ -168,6 +168,8 @@
     <ClCompile Include="Source\UI\Trash.cpp" />
     <ClCompile Include="Source\UI\Motion.cpp" />
     <ClCompile Include="Source\UI\Card.cpp" />
+    <ClCompile Include="Source\UI\WindowChrome.cpp" />
+    <ClCompile Include="Source\UI\LockScene.cpp" />
     <ClCompile Include="Source\UI\ScreenSettings.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -312,6 +314,8 @@
     <ClInclude Include="Source\UI\Motion.h" />
     <ClInclude Include="Source\UI\MotionCurve.h" />
     <ClInclude Include="Source\UI\Card.h" />
+    <ClInclude Include="Source\UI\WindowChrome.h" />
+    <ClInclude Include="Source\UI\LockScene.h" />
     <ClInclude Include="Source\Core\Age.h" />
     <ClInclude Include="Source\UI\SaveFileDialog.h" />
     <ClInclude Include="Source\UI\Shortcuts.h" />

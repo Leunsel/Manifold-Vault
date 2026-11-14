@@ -995,31 +995,6 @@ namespace Bunker::UI::Settings
         bool commit = false;
 
         const float contentWidth = ScreenContentWidth(ImGui::GetContentRegionAvail().x);
-        const ImVec2 origin = ImGui::GetCursorScreenPos();
-
-        char closeLabel[96];
-        std::snprintf(closeLabel, sizeof(closeLabel),
-                      ICON_FA_XMARK "   %s", T(Str::Settings_Close));
-        const float headHeight = Px(30.0f);
-        const float closeWidth =
-            Max(Px(120.0f), ImGui::CalcTextSize(closeLabel).x +
-                            ImGui::GetStyle().FramePadding.x * 2.0f);
-
-        const ImVec2 headAt = origin;
-        const float headWidth = contentWidth;
-        ImGui::GetWindowDrawList()->AddText(
-            f.Strong, Px(Fonts::Sizes::Title),
-            ImVec2(headAt.x,
-                   headAt.y + (headHeight - Px(Fonts::Sizes::Title)) * 0.5f),
-            Theme::U32(Token::TextPrimary), T(Str::Settings_Title));
-
-        ImGui::SetCursorScreenPos(
-            ImVec2(headAt.x + headWidth - closeWidth, headAt.y));
-        if (ImGui::Button(closeLabel, ImVec2(closeWidth, headHeight)))
-            Close();
-        ImGui::SetCursorScreenPos(ImVec2(origin.x, headAt.y + headHeight));
-
-        ImGui::Dummy(Px(0, 14));
 
         BeginScreenBody("##settings", contentWidth);
 
@@ -1293,7 +1268,7 @@ namespace Bunker::UI::Settings
         columns.End();
         ImGui::Dummy(Px(0, 10));
 
-        ScrollFade(Token::Panel);
+        ScrollFade(Token::Surface);
         EndScreenBody();
 
         if (!commit)

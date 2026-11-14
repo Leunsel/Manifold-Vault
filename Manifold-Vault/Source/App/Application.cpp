@@ -23,9 +23,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 #include <dxgi1_3.h>
 #include <dwmapi.h>
+#include <windowsx.h>
 #include <wtsapi32.h>
 
 #pragma comment(lib, "wtsapi32.lib")
@@ -89,18 +91,17 @@ namespace Bunker
         constexpr int kWindowWidth = 1180;
         constexpr int kWindowHeight = 760;
 
-        constexpr DWORD kUseImmersiveDarkMode = 20;
-        constexpr DWORD kBorderColor = 34;
-        constexpr DWORD kCaptionColor = 35;
-        constexpr DWORD kTextColor = 36;
+        constexpr DWORD kWindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |
+                                       WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPCHILDREN;
 
-        COLORREF ToColorRef(ImVec4 c)
-        {
-            const auto b = static_cast<DWORD>(c.z * 255.0f + 0.5f);
-            const auto g = static_cast<DWORD>(c.y * 255.0f + 0.5f);
-            const auto r = static_cast<DWORD>(c.x * 255.0f + 0.5f);
-            return RGB(r, g, b);
-        }
+        constexpr DWORD kUseImmersiveDarkMode = 20;
+        constexpr DWORD kWindowCornerPreference = 33;
+        constexpr DWORD kBorderColor = 34;
+        constexpr DWORD kCornerRound = 2;
+        constexpr COLORREF kColorNone = 0xFFFFFFFE;
+        constexpr float kCornerRadius = 8.0f;
+        constexpr float kResizeEdge = 5.0f;
+        constexpr float kResizeCorner = 14.0f;
 
         void FollowSystemAnimations()
         {
@@ -164,7 +165,7 @@ namespace Bunker
         }
 
         m_hwnd = ::CreateWindowExW(0, kWindowClass, kWindowTitle,
-                                   WS_OVERLAPPEDWINDOW,
+                                   kWindowStyle,
                                    CW_USEDEFAULT, CW_USEDEFAULT,
                                    kWindowWidth, kWindowHeight,
                                    nullptr, nullptr, instance, this);
@@ -199,7 +200,7 @@ namespace Bunker
         ::SetWindowPos(m_hwnd, nullptr,
                        info.rcWork.left + (workWidth - width) / 2,
                        info.rcWork.top + (workHeight - height) / 2,
-                       width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+                       width, height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
 
     void Application::ApplyWindowChrome()
@@ -207,12 +208,28 @@ namespace Bunker
         const BOOL dark = Theme::IsLight() ? FALSE : TRUE;
         ::DwmSetWindowAttribute(m_hwnd, kUseImmersiveDarkMode, &dark, sizeof(dark));
 
-        const COLORREF caption = ToColorRef(Theme::Color(Theme::Token::Panel));
-        const COLORREF border = ToColorRef(Theme::Color(Theme::Token::Line));
-        const COLORREF text = ToColorRef(Theme::Color(Theme::Token::TextSecondary));
-        ::DwmSetWindowAttribute(m_hwnd, kCaptionColor, &caption, sizeof(caption));
+        const DWORD corner = kCornerRound;
+        m_roundedCorners = SUCCEEDED(
+            ::DwmSetWindowAttribute(m_hwnd, kWindowCornerPreference, &corner, sizeof(corner)));
+        const COLORREF border = kColorNone;
         ::DwmSetWindowAttribute(m_hwnd, kBorderColor, &border, sizeof(border));
-        ::DwmSetWindowAttribute(m_hwnd, kTextColor, &text, sizeof(text));
+    }
+
+    float Application::CornerRadius() const
+    {
+        if (!m_roundedCorners || !m_hwnd || Maximised())
+            return 0.0f;
+        return kCornerRadius * static_cast<float>(m_dpi) / 96.0f;
+    }
+
+    void Application::AddDragArea(float left, float top, float right, float bottom)
+    {
+        if (right <= left || bottom <= top)
+            return;
+        m_dragAreas.push_back(RECT{ static_cast<LONG>(std::lround(left)),
+                                    static_cast<LONG>(std::lround(top)),
+                                    static_cast<LONG>(std::lround(right)),
+                                    static_cast<LONG>(std::lround(bottom)) });
     }
 
     bool Application::CreateDeviceAndSwapChain()
@@ -454,6 +471,7 @@ namespace Bunker
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+        m_dragAreas.clear();
 
         m_session.Poll();
         UpdateLockState();
@@ -886,6 +904,56 @@ namespace Bunker
             mmi->ptMinTrackSize.x = least.cx;
             mmi->ptMinTrackSize.y = least.cy;
             return 0;
+        }
+
+        case WM_NCCALCSIZE:
+            if (wp)
+            {
+                if (::IsZoomed(hwnd))
+                {
+                    const UINT dpi = ::GetDpiForWindow(hwnd);
+                    const int padding = ::GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+                    auto* sizes = reinterpret_cast<NCCALCSIZE_PARAMS*>(lp);
+                    ::InflateRect(&sizes->rgrc[0],
+                                  -(::GetSystemMetricsForDpi(SM_CXFRAME, dpi) + padding),
+                                  -(::GetSystemMetricsForDpi(SM_CYFRAME, dpi) + padding));
+                }
+                return 0;
+            }
+            break;
+
+        case WM_NCHITTEST:
+        {
+            POINT point{ GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            ::ScreenToClient(hwnd, &point);
+
+            if (!::IsZoomed(hwnd))
+            {
+                RECT client{};
+                ::GetClientRect(hwnd, &client);
+                const float dpiScale = static_cast<float>(m_dpi) / 96.0f;
+                const LONG edge = std::lround(kResizeEdge * dpiScale);
+                const LONG corner = std::lround(kResizeCorner * dpiScale);
+                const bool nearLeft = point.x < corner;
+                const bool nearRight = point.x >= client.right - corner;
+                const bool nearTop = point.y < corner;
+                const bool nearBottom = point.y >= client.bottom - corner;
+                if (point.y < edge)
+                    return nearLeft ? HTTOPLEFT : nearRight ? HTTOPRIGHT : HTTOP;
+                if (point.y >= client.bottom - edge)
+                    return nearLeft ? HTBOTTOMLEFT : nearRight ? HTBOTTOMRIGHT : HTBOTTOM;
+                if (point.x < edge)
+                    return nearTop ? HTTOPLEFT : nearBottom ? HTBOTTOMLEFT : HTLEFT;
+                if (point.x >= client.right - edge)
+                    return nearTop ? HTTOPRIGHT : nearBottom ? HTBOTTOMRIGHT : HTRIGHT;
+            }
+
+            for (const RECT& area : m_dragAreas)
+            {
+                if (::PtInRect(&area, point))
+                    return HTCAPTION;
+            }
+            return HTCLIENT;
         }
 
         case WM_SYSCOMMAND:

@@ -9,7 +9,7 @@
 
 namespace Bunker::UI
 {
-    inline void ScrollFade(Theme::Token background)
+    inline void ScrollFade(ImVec4 background)
     {
         const float scroll = ImGui::GetScrollY();
         const float scrollMax = ImGui::GetScrollMaxY();
@@ -19,20 +19,29 @@ namespace Bunker::UI
         const ImVec2 pos = ImGui::GetWindowPos();
         const ImVec2 size = ImGui::GetWindowSize();
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImU32 clear = Theme::U32(background, 0.0f);
+        const auto tone = [background](float alpha) {
+            return ImGui::ColorConvertFloat4ToU32(
+                ImVec4(background.x, background.y, background.z, alpha));
+        };
+        const ImU32 clear = tone(0.0f);
         if (topAmount > 0.0f)
         {
-            const ImU32 solid = Theme::U32(background, topAmount);
+            const ImU32 solid = tone(topAmount);
             dl->AddRectFilledMultiColor(pos, ImVec2(pos.x + size.x, pos.y + fade),
                                         solid, solid, clear, clear);
         }
         if (bottomAmount > 0.0f)
         {
-            const ImU32 solid = Theme::U32(background, bottomAmount);
+            const ImU32 solid = tone(bottomAmount);
             dl->AddRectFilledMultiColor(ImVec2(pos.x, pos.y + size.y - fade),
                                         ImVec2(pos.x + size.x, pos.y + size.y),
                                         clear, clear, solid, solid);
         }
+    }
+
+    inline void ScrollFade(Theme::Token background)
+    {
+        ScrollFade(Theme::Color(background));
     }
 
     inline float ScreenContentWidth(float avail)

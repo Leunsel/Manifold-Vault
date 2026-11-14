@@ -108,6 +108,17 @@ namespace Bunker::Theme
     ImU32 U32(Token t) { return ImGui::ColorConvertFloat4ToU32(Color(t)); }
     ImU32 U32(Token t, float alpha) { return ImGui::ColorConvertFloat4ToU32(Color(t, alpha)); }
 
+    ImVec4 CardColor(float alpha)
+    {
+        constexpr float kLift = 0.45f;
+        const ImVec4 under = Color(Token::Surface);
+        const ImVec4 over = Color(Token::Elevated);
+        return ImVec4(under.x + (over.x - under.x) * kLift, under.y + (over.y - under.y) * kLift,
+                      under.z + (over.z - under.z) * kLift, alpha);
+    }
+
+    ImU32 CardU32(float alpha) { return ImGui::ColorConvertFloat4ToU32(CardColor(alpha)); }
+
     float RelativeLuminance(ImVec4 c)
     {
         return 0.2126f * Linearize(c.x) + 0.7152f * Linearize(c.y) + 0.0722f * Linearize(c.z);

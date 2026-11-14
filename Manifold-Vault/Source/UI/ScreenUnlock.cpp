@@ -7,11 +7,13 @@
 #include "Core/Language.h"
 #include "Core/PasswordStrength.h"
 #include "UI/BunkerFonts.h"
+#include "UI/LockScene.h"
 #include "UI/Motion.h"
 #include "UI/SecretInput.h"
 #include "UI/Shortcuts.h"
 #include "UI/UiMath.h"
 #include "UI/UiScale.h"
+#include "UI/WindowChrome.h"
 #include "Generated/FaIcons.h"
 
 #include "imgui.h"
@@ -253,98 +255,6 @@ namespace Bunker::UI
             dl->AddCircleFilled(c, radius * 0.05f, Theme::U32(Token::Panel), 16);
         }
 
-        struct Band
-        {
-            Token Colour;
-            float Strength;
-            float Centre;
-            float Amplitude;
-            float Waves;
-            float Speed;
-            float Width;
-            float Phase;
-        };
-
-        constexpr Band kBands[] = {
-            { Token::AccentDim,  0.80f, 0.26f, 0.09f, 0.85f,  0.045f, 0.120f, 0.0f },
-            { Token::GlowCore,   0.30f, 0.50f, 0.12f, 0.65f, -0.032f, 0.090f, 1.9f },
-            { Token::LineStrong, 0.85f, 0.80f, 0.07f, 1.15f,  0.038f, 0.110f, 3.7f },
-            { Token::AccentCore, 0.20f, 0.62f, 0.13f, 0.45f, -0.050f, 0.060f, 5.1f },
-            { Token::GlowDim,    0.70f, 0.08f, 0.06f, 1.40f,  0.028f, 0.080f, 2.6f },
-        };
-
-        ImU32 SilkColour(float u, float v, float t)
-        {
-            constexpr float kTau = 6.2831853f;
-            const float bend = 0.05f * std::sin(kTau * (u * 1.3f + t * 0.017f)) +
-                               0.03f * std::sin(kTau * (u * 2.9f - t * 0.023f) + 1.3f);
-            const float y = v + bend;
-
-            const ImVec4 ground = Theme::Color(Token::Void);
-            float r = ground.x, g = ground.y, b = ground.z;
-            for (const Band& band : kBands)
-            {
-                const float centre =
-                    band.Centre +
-                    band.Amplitude * std::sin(kTau * (band.Waves * u + band.Speed * t) + band.Phase);
-                const float d = (y - centre) / band.Width;
-                const float glow = band.Strength * std::exp(-d * d);
-                const ImVec4 c = Theme::Color(band.Colour);
-                r += (c.x - ground.x) * glow;
-                g += (c.y - ground.y) * glow;
-                b += (c.z - ground.z) * glow;
-            }
-            const float dx = (u - 0.5f) * 2.0f;
-            const float dy = (v - 0.45f) * 2.0f;
-            const float vignette = Clamp(1.0f - 0.38f * (dx * dx + dy * dy), 0.45f, 1.0f);
-            const float dim = 0.50f * vignette;
-            r = ground.x + (r - ground.x) * dim;
-            g = ground.y + (g - ground.y) * dim;
-            b = ground.z + (b - ground.z) * dim;
-            return ImGui::ColorConvertFloat4ToU32(
-                ImVec4(Clamp(r, 0.0f, 1.0f), Clamp(g, 0.0f, 1.0f), Clamp(b, 0.0f, 1.0f), 1.0f));
-        }
-
-        void DrawAurora(ImDrawList* dl, ImVec2 min, ImVec2 max)
-        {
-            const float t = Motion::Enabled() ? static_cast<float>(ImGui::GetTime()) : 0.0f;
-            const ImVec2 size(max.x - min.x, max.y - min.y);
-            if (size.x <= 1.0f || size.y <= 1.0f)
-                return;
-
-            const int cols = Clamp(static_cast<int>(size.x / Px(24.0f)), 24, 96);
-            const int rows = Clamp(static_cast<int>(size.y / Px(24.0f)), 16, 64);
-            const int stride = cols + 1;
-            const ImVec2 uv = ImGui::GetFontTexUvWhitePixel();
-
-            dl->PrimReserve(cols * rows * 6, stride * (rows + 1));
-            const unsigned int base = dl->_VtxCurrentIdx;
-            for (int row = 0; row <= rows; ++row)
-            {
-                const float v = static_cast<float>(row) / static_cast<float>(rows);
-                for (int col = 0; col <= cols; ++col)
-                {
-                    const float u = static_cast<float>(col) / static_cast<float>(cols);
-                    dl->PrimWriteVtx(ImVec2(min.x + size.x * u, min.y + size.y * v), uv,
-                                     SilkColour(u, v, t));
-                }
-            }
-            for (int row = 0; row < rows; ++row)
-                for (int col = 0; col < cols; ++col)
-                {
-                    const unsigned int a = base + static_cast<unsigned int>(row * stride + col);
-                    const unsigned int b = a + 1;
-                    const unsigned int c = a + static_cast<unsigned int>(stride);
-                    const unsigned int d = c + 1;
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(a));
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(b));
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(d));
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(a));
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(d));
-                    dl->PrimWriteIdx(static_cast<ImDrawIdx>(c));
-                }
-        }
-
         float Pill(ImDrawList* dl, float right, float centreY, const char* text, Token fg, Token bg)
         {
             const Fonts::Set& f = Fonts::Current();
@@ -387,7 +297,13 @@ namespace Bunker::UI
                         Theme::U32(Token::TextMuted), T(Str::Main_BrandTagline));
 
             const float centreY = min.y + height * 0.5f;
-            float right = max.x - margin;
+            const float side = ImGui::GetFrameHeight();
+            const float buttonsX = max.x - Px(20.0f) - WindowButtonsWidth();
+            const float buttonsY = std::round(centreY - side * 0.5f);
+            WindowButtons(app, ImVec2(buttonsX, buttonsY));
+            app.AddDragArea(min.x, min.y, buttonsX, min.y + height);
+            app.AddDragArea(buttonsX, min.y, max.x, buttonsY);
+            float right = buttonsX - Px(24.0f);
             const std::string& machine = app.MachineName();
             if (!machine.empty())
             {
@@ -855,7 +771,7 @@ namespace Bunker::UI
         const ImVec2 windowSize = ImGui::GetWindowSize();
         const ImVec2 windowMax(windowMin.x + windowSize.x, windowMin.y + windowSize.y);
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        DrawAurora(dl, windowMin, windowMax);
+        DrawLockScene(dl, windowMin, windowMax, Motion::Enabled() ? ImGui::GetTime() : 0.0);
 
         if (state == VaultSession::State::NoVaultYet)
             g_lastWhich = 1;
@@ -956,6 +872,7 @@ namespace Bunker::UI
                 g_door.Done = true;
         }
 
+        DrawWindowEdge(app, dl);
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();

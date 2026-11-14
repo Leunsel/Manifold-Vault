@@ -35,7 +35,7 @@ UI_ICONS = [
     "layer-group", "circle-minus", "folder-plus",
     "text-height", "keyboard", "terminal", "arrow-up-right-from-square",
     "square-check", "hourglass-half",
-    "palette",
+    "palette", "minus", "window-maximize", "window-restore", "cube",
 ]
 
 # Names are stored in vaults (Entry::Symbol): never remove or rename one.

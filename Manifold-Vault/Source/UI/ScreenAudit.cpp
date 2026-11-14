@@ -257,33 +257,10 @@ namespace Bunker::UI::Audit
     bool Draw(Application& app, VaultSession& session)
     {
         (void)app;
-        const Fonts::Set& f = Fonts::Current();
         const Vault::Document& doc = session.Vault().Doc();
         const Vault::AuditReport& report = Report(session);
 
-        char closeLabel[96];
-        std::snprintf(closeLabel, sizeof(closeLabel),
-                      ICON_FA_XMARK "   %s", T(Str::Audit_Close));
-        const float buttonHeight = Px(30.0f);
-        const float closeWidth =
-            Max(Px(120.0f), ImGui::CalcTextSize(closeLabel).x +
-                            ImGui::GetStyle().FramePadding.x * 2.0f);
-
         const float headWidth = ScreenContentWidth(ImGui::GetContentRegionAvail().x);
-        const ImVec2 headAt = ImGui::GetCursorScreenPos();
-        ImGui::GetWindowDrawList()->AddText(
-            f.Strong, Px(Fonts::Sizes::Title),
-            ImVec2(headAt.x,
-                   headAt.y + (buttonHeight - Px(Fonts::Sizes::Title)) * 0.5f),
-            Theme::U32(Token::TextPrimary), T(Str::Audit_Title));
-
-        ImGui::SetCursorScreenPos(
-            ImVec2(headAt.x + headWidth - closeWidth, headAt.y));
-        if (ImGui::Button(closeLabel, ImVec2(closeWidth, buttonHeight)))
-            Close();
-        ImGui::SetCursorScreenPos(ImVec2(headAt.x, headAt.y + buttonHeight));
-
-        ImGui::Dummy(Px(0, 14));
 
         BeginScreenBody("##security", headWidth);
 
@@ -538,7 +515,7 @@ namespace Bunker::UI::Audit
         columns.End();
         ImGui::Dummy(Px(0, 10));
 
-        ScrollFade(Token::Panel);
+        ScrollFade(Token::Surface);
         EndScreenBody();
         return false;
     }

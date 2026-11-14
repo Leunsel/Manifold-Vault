@@ -21,6 +21,7 @@ inline constexpr ImWchar kFaSolidRanges[] = {
     0xF03A, 0xF03A,
     0xF053, 0xF058,
     0xF05A, 0xF05A,
+    0xF068, 0xF068,
     0xF06E, 0xF06E,
     0xF070, 0xF071,
     0xF077, 0xF078,
@@ -41,9 +42,12 @@ inline constexpr ImWchar kFaSolidRanges[] = {
     0xF120, 0xF120,
     0xF142, 0xF142,
     0xF14A, 0xF14A,
+    0xF1B2, 0xF1B2,
     0xF1EB, 0xF1EB,
     0xF1F8, 0xF1F8,
     0xF252, 0xF252,
+    0xF2D0, 0xF2D0,
+    0xF2D2, 0xF2D2,
     0xF2F1, 0xF2F1,
     0xF304, 0xF304,
     0xF328, 0xF328,
@@ -116,3 +120,7 @@ inline constexpr ImWchar kFaSolidRanges[] = {
 #define ICON_FA_SQUARE_CHECK               "\xef\x85\x8a"
 #define ICON_FA_HOURGLASS_HALF             "\xef\x89\x92"
 #define ICON_FA_PALETTE                    "\xef\x94\xbf"
+#define ICON_FA_MINUS                      "\xef\x81\xa8"
+#define ICON_FA_WINDOW_MAXIMIZE            "\xef\x8b\x90"
+#define ICON_FA_WINDOW_RESTORE             "\xef\x8b\x92"
+#define ICON_FA_CUBE                       "\xef\x86\xb2"

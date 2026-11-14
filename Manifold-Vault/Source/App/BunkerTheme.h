@@ -68,6 +68,9 @@ namespace Bunker::Theme
     ImU32 U32(Token t);
     ImU32 U32(Token t, float alpha);
 
+    ImVec4 CardColor(float alpha = 1.0f);
+    ImU32 CardU32(float alpha = 1.0f);
+
     float RelativeLuminance(ImVec4 c);
     ImU32 ReadableTextOn(ImVec4 background);
 
