@@ -1576,8 +1576,10 @@ namespace Bunker::UI
             const Fonts::Set& f = Fonts::Current();
             g_sidebarCompact = doc.VaultSettings.SidebarCollapsed;
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(8, 10));
             ImGui::BeginChild("##sidebar", ImVec2(width, height),
                               ImGuiChildFlags_AlwaysUseWindowPadding);
+            ImGui::PopStyleVar();
 
             ImGui::PushStyleVar(ImGuiStyleVar_SelectableRounding, Theme::Round(Px(4.0f)));
 
@@ -4450,8 +4452,11 @@ namespace Bunker::UI
         void DrawDetail(Application& app, VaultSession& session, float width, float height)
         {
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(std::round(Px(kScrollOverhang)), 0.0f));
             ImGui::BeginChild("##detail", ImVec2(width, height),
                               ImGuiChildFlags_AlwaysUseWindowPadding);
+            ImGui::PopStyleVar();
 
             const std::uint64_t key = CurrentDetailKey();
             const bool entryToEntry = PlaceOf(key) == DetailPlace::Entry &&
@@ -5469,7 +5474,7 @@ namespace Bunker::UI
         if (g_folderScope == FolderScope::Finding)
             Audit::EntriesWith(session, g_findingKind, g_findingIds);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(8, 10));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(14, 10));
         DrawSidebar(app, session, sidebarWidth, fullHeight, marginY, headerHeight, gap);
         ImGui::PopStyleVar();
         ImGui::SameLine(0, 0);
@@ -5489,7 +5494,7 @@ namespace Bunker::UI
         DrawSaveBanner(app, session);
         const float bodyHeight = ImGui::GetContentRegionAvail().y;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(overhang, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PxWhole(14, 10));
         if (!Settings::IsOpen() && !Audit::IsOpen())
         {
             DrawEntryList(app, session, listWidth, bodyHeight);
